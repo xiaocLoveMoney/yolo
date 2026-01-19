@@ -1,0 +1,17 @@
+main:
+  push:
+    - services:
+        - docker
+      stages:
+        # Backend 镜像构建
+        - name: Backend Docker build
+          script: docker build -t ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}/backend:latest -f docker/backend/Dockerfile .
+        # Backend 镜像推送
+        - name: Backend Docker push
+          script: docker push ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}/backend:latest
+        # Frontend 镜像构建
+        - name: Frontend Docker build
+          script: docker build -t ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}/frontend:latest -f docker/frontend/Dockerfile .
+        # Frontend 镜像推送
+        - name: Frontend Docker push
+          script: docker push ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}/frontend:latest
