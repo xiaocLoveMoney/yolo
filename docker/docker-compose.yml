@@ -1,0 +1,63 @@
+# YOLO Training Platform - Docker Compose Configuration
+# 启动方式: cd docker && docker-compose up -d
+
+services:
+  # 后端服务 - Python 3.13 + GPU
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    container_name: yolo-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # 数据持久化
+      - ./backend/data:/app/data
+      - ./backend/models:/app/models
+    shm_size: '24gb'  # 增加共享内存大小以支持 PyTorch 多进程数据加载
+    networks:
+      - yolo-network
+    # GPU 支持 - 继承宿主机 NVIDIA 驱动
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 前端服务 - Node 22 构建 + Nginx 服务
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    container_name: yolo-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    networks:
+      - yolo-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# 独立网络
+networks:
+  yolo-network:
+    driver: bridge
+    name: yolo-network
