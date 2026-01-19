@@ -36,8 +36,15 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # 复制 nginx 配置文件
 COPY docker/frontend/nginx.conf /etc/nginx/nginx.conf
 
+# 复制启动脚本
+COPY docker/frontend/docker-entrypoint.sh /usr/local/bin/custom-entrypoint.sh
+RUN chmod +x /usr/local/bin/custom-entrypoint.sh
+
 # 暴露端口
 EXPOSE 80
 
-# 启动 nginx
-CMD ["nginx", "-g", "daemon off;"]
+# 设置环境变量默认值
+ENV BACKEND_HOST=backend
+
+# 使用自定义启动脚本
+ENTRYPOINT ["/usr/local/bin/custom-entrypoint.sh"]
