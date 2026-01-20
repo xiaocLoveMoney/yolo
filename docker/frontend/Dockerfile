@@ -5,7 +5,7 @@
 FROM node:22-alpine AS builder
 
 # 配置 npm 镜像源（npmmirror.com）
-RUN npm config set registry https://registry.npmmirror.com
+# RUN npm config set registry https://registry.npmmirror.com
 
 # 设置工作目录
 WORKDIR /app
