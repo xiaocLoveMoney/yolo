@@ -8,6 +8,3 @@ pillow>=11.0.0
 pyyaml==6.0.1
 aiofiles==23.2.1
 psutil==5.9.8
-# PyTorch with CUDA 12.8 support for RTX 5070 (Blackwell sm_120)
-torch>=2.0.0
-torchvision>=0.15.0

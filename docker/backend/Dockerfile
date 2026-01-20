@@ -44,14 +44,14 @@ WORKDIR /app
 # 复制 requirements.txt
 COPY backend/requirements.txt /app/requirements.txt
 
-# 先安装 PyTorch 和 torchvision（使用 nightly 版本，CUDA 12.8 支持 RTX 5070 Blackwell sm_120）
-# 增加超时时间和重试次数以应对网络问题
-RUN pip install --default-timeout=300 --retries=5 --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
-
 # 安装其他依赖（从清华镜像，排除 torch 和 torchvision）
 RUN grep -v "^torch" /app/requirements.txt | grep -v "^#" | grep -v "^$" > /tmp/requirements_no_torch.txt && \
     pip install -r /tmp/requirements_no_torch.txt && \
     rm /tmp/requirements_no_torch.txt
+    
+# 先安装 PyTorch 和 torchvision（使用 nightly 版本，CUDA 12.8 支持 RTX 5070 Blackwell sm_120）
+# 增加超时时间和重试次数以应对网络问题
+RUN pip install --default-timeout=300 --retries=5 --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
 
 # 复制后端源代码
 COPY backend/src /app/src
