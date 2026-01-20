@@ -3,7 +3,6 @@ main:
     - services:
         - docker
       stages:
-        # 构建合并镜像（包含 backend 和 frontend）
         - name: Build unified yolo image
           script: |
             # 构建 backend 镜像（作为中间镜像）
@@ -29,29 +28,40 @@ main:
             COPY --from=frontend /usr/share/nginx/html /usr/share/nginx/html
             COPY --from=frontend /etc/nginx/nginx.conf /etc/nginx/nginx.conf
             
-            # 安装启动脚本依赖
-            RUN apk add --no-cache bash curl
+            # 安装启动脚本依赖和进程管理工具
+            RUN apk add --no-cache bash curl supervisor
             
-            # 创建启动脚本
-            COPY << 'SCRIPT' /usr/local/bin/start.sh
-            #!/bin/bash
-            SERVICE=${1:-backend}
-            if [ "$SERVICE" = "backend" ]; then
-              cd /app/backend
-              exec uvicorn src.main:app --host 0.0.0.0 --port 8000
-            elif [ "$SERVICE" = "frontend" ]; then
-              exec nginx -g "daemon off;"
-            else
-              echo "Usage: start.sh [backend|frontend]"
-              exit 1
-            fi
-            SCRIPT
+            # 创建 supervisord 配置文件
+            RUN mkdir -p /etc/supervisor/conf.d
+            COPY << 'SUPERVISOR' /etc/supervisor/conf.d/yolo.conf
+            [supervisord]
+            nodaemon=true
+            logfile=/var/log/supervisor/supervisord.log
+            pidfile=/var/run/supervisord.pid
             
-            RUN chmod +x /usr/local/bin/start.sh
+            [program:backend]
+            command=/usr/local/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000
+            directory=/app/backend
+            autostart=true
+            autorestart=true
+            stdout_logfile=/dev/stdout
+            stdout_logfile_maxbytes=0
+            stderr_logfile=/dev/stderr
+            stderr_logfile_maxbytes=0
+            
+            [program:frontend]
+            command=/usr/sbin/nginx -g "daemon off;"
+            autostart=true
+            autorestart=true
+            stdout_logfile=/dev/stdout
+            stdout_logfile_maxbytes=0
+            stderr_logfile=/dev/stderr
+            stderr_logfile_maxbytes=0
+            SUPERVISOR
             
             EXPOSE 8000 80
             
-            CMD ["/usr/local/bin/start.sh", "backend"]
+            CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/yolo.conf"]
             EOF
             
             # 构建最终镜像
