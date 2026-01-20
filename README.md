@@ -109,7 +109,7 @@ npm run dev
 
 ```bash
 # 从 CNB 镜像仓库拉取（需要替换为实际的 CNB 镜像地址）
-docker pull <cnb-registry>/<repo-name>/yolo:latest
+docker pull docker.cnb.cool/xiaoclab/vegetable/yolo:latest
 ```
 
 **海外用户（使用 Docker Hub）：**
@@ -135,7 +135,7 @@ docker run -d \
   --shm-size=24gb \
   -e NVIDIA_VISIBLE_DEVICES=all \
   -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
-  <your-image-name>:latest
+  docker.cnb.cool/xiaoclab/vegetable/yolo:latest
 ```
 
 ##### 方案 B：CPU 模式（仅推理/测试）
@@ -147,7 +147,7 @@ docker run -d \
   --name yolo-platform \
   -p 3000:80 \
   -p 8000:8000 \
-  <your-image-name>:latest
+  docker.cnb.cool/xiaoclab/vegetable/yolo:latest
 ```
 
 #### 访问服务
@@ -565,7 +565,7 @@ docker run -d \
   --shm-size=24gb \
   -e NVIDIA_VISIBLE_DEVICES=all \
   -e NVIDIA_DRIVER_CAPABILITIES=compute,utility \
-  <your-image-name>:latest
+  docker.cnb.cool/xiaoclab/vegetable/yolo:latest
 ```
 
 ##### Option B: CPU Mode (Inference/Testing Only)
@@ -577,7 +577,7 @@ docker run -d \
   --name yolo-platform \
   -p 3000:80 \
   -p 8000:8000 \
-  <your-image-name>:latest
+  docker.cnb.cool/xiaoclab/vegetable/yolo:latest
 ```
 
 #### Access Services
