@@ -3,15 +3,60 @@ main:
     - services:
         - docker
       stages:
-        # Backend 镜像构建
-        - name: Backend Docker build
-          script: docker build -t ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}/backend:latest -f docker/backend/Dockerfile .
-        # Backend 镜像推送
-        - name: Backend Docker push
-          script: docker push ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}/backend:latest
-        # Frontend 镜像构建
-        - name: Frontend Docker build
-          script: docker build -t ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}/frontend:latest -f docker/frontend/Dockerfile .
-        # Frontend 镜像推送
-        - name: Frontend Docker push
-          script: docker push ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}/frontend:latest
+        # 构建合并镜像（包含 backend 和 frontend）
+        - name: Build unified yolo image
+          script: |
+            # 构建 backend 镜像（作为中间镜像）
+            docker build -t yolo-backend:temp -f docker/backend/Dockerfile .
+            
+            # 构建 frontend 镜像（作为中间镜像）
+            docker build -t yolo-frontend:temp -f docker/frontend/Dockerfile .
+            
+            # 创建合并镜像的 Dockerfile（临时）
+            cat > /tmp/Dockerfile.unified << 'EOF'
+            FROM yolo-backend:temp AS backend
+            FROM yolo-frontend:temp AS frontend
+            
+            # 最终镜像基于 nginx（前端基础镜像更轻量）
+            FROM nginx:alpine
+            
+            # 从 backend 阶段复制 Python 环境和代码
+            COPY --from=backend /usr/local /usr/local
+            COPY --from=backend /app /app/backend
+            COPY --from=backend /etc/apt /etc/apt
+            
+            # 从 frontend 阶段复制前端文件
+            COPY --from=frontend /usr/share/nginx/html /usr/share/nginx/html
+            COPY --from=frontend /etc/nginx/nginx.conf /etc/nginx/nginx.conf
+            
+            # 安装启动脚本依赖
+            RUN apk add --no-cache bash curl
+            
+            # 创建启动脚本
+            COPY << 'SCRIPT' /usr/local/bin/start.sh
+            #!/bin/bash
+            SERVICE=${1:-backend}
+            if [ "$SERVICE" = "backend" ]; then
+              cd /app/backend
+              exec uvicorn src.main:app --host 0.0.0.0 --port 8000
+            elif [ "$SERVICE" = "frontend" ]; then
+              exec nginx -g "daemon off;"
+            else
+              echo "Usage: start.sh [backend|frontend]"
+              exit 1
+            fi
+            SCRIPT
+            
+            RUN chmod +x /usr/local/bin/start.sh
+            
+            EXPOSE 8000 80
+            
+            CMD ["/usr/local/bin/start.sh", "backend"]
+            EOF
+            
+            # 构建最终镜像
+            docker build -t ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}:latest -f /tmp/Dockerfile.unified .
+        
+        # 推送合并镜像
+        - name: Push unified yolo image
+          script: docker push ${CNB_DOCKER_REGISTRY}/${CNB_REPO_SLUG_LOWERCASE}:latest
