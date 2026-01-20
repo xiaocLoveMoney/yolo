@@ -116,7 +116,7 @@ docker pull <cnb-registry>/<repo-name>/yolo:latest
 
 ```bash
 # 从 Docker Hub 拉取（需要替换为实际的 Docker Hub 用户名）
-docker pull <your-username>/yolo-unified:latest
+docker pull xiaoclovemoney/yolo-training-platform:latest
 ```
 
 #### 启动方式
@@ -546,7 +546,7 @@ docker pull <cnb-registry>/<repo-name>/yolo:latest
 
 ```bash
 # Pull from Docker Hub (replace with actual Docker Hub username)
-docker pull <your-username>/yolo-unified:latest
+docker pull xiaoclovemoney/yolo-training-platform:latest
 ```
 
 #### Startup Methods
