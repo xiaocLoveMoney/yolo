@@ -80,3 +80,28 @@ export const deleteModel = async (modelId: string) => {
   const { data } = await api.delete(`/models/${modelId}`)
   return data
 }
+
+export const uploadModel = async (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await api.post('/models/upload', formData)
+  return data
+}
+
+export const exportModel = async (modelId: string): Promise<Blob> => {
+  const response = await api.get(`/models/${modelId}/export`, {
+    responseType: 'blob'
+  })
+  return response.data
+}
+
+export const generateTrainingCharts = async (
+  modelId: string, 
+  chartType: 'loss' | 'metrics' | 'all' = 'all'
+): Promise<Blob> => {
+  const response = await api.get(`/models/${modelId}/charts`, {
+    params: { chart_type: chartType },
+    responseType: 'blob'
+  })
+  return response.data
+}

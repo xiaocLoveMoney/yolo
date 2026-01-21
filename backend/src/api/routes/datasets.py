@@ -1,4 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, Dict
 from src.services.dataset_service import DatasetService
@@ -61,3 +62,37 @@ async def delete_dataset(dataset_id: str):
     if not result:
         raise HTTPException(404, "Dataset not found")
     return result
+
+@router.get("/{dataset_id}/export/annotated")
+async def export_annotated_dataset(
+    dataset_id: str,
+    version: str = Query("v1", description="数据集版本")
+):
+    """导出标注后的数据集（包含图片和标签）"""
+    zip_path = await dataset_service.export_annotated_dataset(dataset_id, version)
+    if not zip_path:
+        raise HTTPException(404, "Dataset not found")
+    
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=f"{dataset_id}_annotated.zip",
+        headers={"Content-Disposition": f"attachment; filename={dataset_id}_annotated.zip"}
+    )
+
+@router.get("/{dataset_id}/export/original")
+async def export_original_dataset(
+    dataset_id: str,
+    version: str = Query("v1", description="数据集版本")
+):
+    """导出标注前的数据集（仅包含图片）"""
+    zip_path = await dataset_service.export_original_dataset(dataset_id, version)
+    if not zip_path:
+        raise HTTPException(404, "Dataset not found")
+    
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=f"{dataset_id}_original.zip",
+        headers={"Content-Disposition": f"attachment; filename={dataset_id}_original.zip"}
+    )

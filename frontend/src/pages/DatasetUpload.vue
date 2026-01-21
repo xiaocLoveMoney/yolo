@@ -51,6 +51,24 @@
                 {{ editingDataset === dataset.dataset_id ? '保存中...' : '编辑' }}
               </button>
               <button 
+                v-if="dataset.status === 'prepared'"
+                @click="exportAnnotated(dataset.dataset_id)" 
+                class="secondary"
+                :disabled="exportingDataset === dataset.dataset_id + '_annotated'"
+              >
+                <span v-if="exportingDataset === dataset.dataset_id + '_annotated'" class="loading-spinner"></span>
+                {{ exportingDataset === dataset.dataset_id + '_annotated' ? '导出中...' : '导出（标注后）' }}
+              </button>
+              <button 
+                v-if="dataset.status === 'prepared'"
+                @click="exportOriginal(dataset.dataset_id)" 
+                class="secondary"
+                :disabled="exportingDataset === dataset.dataset_id + '_original'"
+              >
+                <span v-if="exportingDataset === dataset.dataset_id + '_original'" class="loading-spinner"></span>
+                {{ exportingDataset === dataset.dataset_id + '_original' ? '导出中...' : '导出（标注前）' }}
+              </button>
+              <button 
                 @click="deleteDatasetItem(dataset.dataset_id)" 
                 class="danger"
                 :disabled="deletingDataset === dataset.dataset_id"
@@ -79,7 +97,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { uploadDataset, prepareDataset as prepareDst, listDatasets, updateDataset, deleteDataset } from '@/api/datasets'
+import { uploadDataset, prepareDataset as prepareDst, listDatasets, updateDataset, deleteDataset, exportAnnotatedDataset, exportOriginalDataset } from '@/api/datasets'
+import { downloadFile } from '@/utils/download'
 
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
@@ -90,6 +109,7 @@ const preparingDataset = ref<string | null>(null)  // 正在准备的数据集ID
 const preparingNew = ref(false)  // 正在准备新上传的数据集
 const editingDataset = ref<string | null>(null)  // 正在编辑的数据集ID
 const deletingDataset = ref<string | null>(null)  // 正在删除的数据集ID
+const exportingDataset = ref<string | null>(null)  // 正在导出的数据集ID
 
 const handleFileSelect = (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -190,6 +210,34 @@ const deleteDatasetItem = async (datasetId: string) => {
     alert('删除失败: ' + (error.response?.data?.detail || error.message))
   } finally {
     deletingDataset.value = null
+  }
+}
+
+// 导出标注后的数据集
+const exportAnnotated = async (datasetId: string) => {
+  exportingDataset.value = datasetId + '_annotated'
+  try {
+    const blob = await exportAnnotatedDataset(datasetId)
+    downloadFile(blob, `${datasetId}_annotated.zip`)
+    alert('导出成功!')
+  } catch (error: any) {
+    alert('导出失败: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    exportingDataset.value = null
+  }
+}
+
+// 导出标注前的数据集
+const exportOriginal = async (datasetId: string) => {
+  exportingDataset.value = datasetId + '_original'
+  try {
+    const blob = await exportOriginalDataset(datasetId)
+    downloadFile(blob, `${datasetId}_original.zip`)
+    alert('导出成功!')
+  } catch (error: any) {
+    alert('导出失败: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    exportingDataset.value = null
   }
 }
 

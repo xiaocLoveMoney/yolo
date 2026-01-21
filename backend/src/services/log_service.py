@@ -54,12 +54,57 @@ def _read_log_lines(log_file: Path, offset: int, max_lines: int = None):
     return lines, new_offset
 
 
+def _get_file_tail_offset(log_file: Path, n_lines: int = 50):
+    """获取文件最后N行的起始位置（字节偏移量）
+    
+    Args:
+        log_file: 日志文件路径
+        n_lines: 要获取的最后N行，默认50行
+    
+    Returns:
+        int: 最后N行的起始位置（字节偏移量），如果文件总行数少于N行，返回0
+    """
+    # 尝试多种编码方式
+    encodings = ['utf-8', 'gbk', 'gb2312', 'cp936', 'latin-1']
+    
+    for encoding in encodings:
+        try:
+            with open(log_file, "r", encoding=encoding, errors="replace") as f:
+                # 读取所有行
+                all_lines = f.readlines()
+                total_lines = len(all_lines)
+                
+                # 如果总行数少于等于n_lines，返回0（从开头开始）
+                if total_lines <= n_lines:
+                    return 0
+                
+                # 计算前 (total_lines - n_lines) 行的总字节数
+                # 重新打开文件，逐行读取并计算字节数
+                f.seek(0)
+                offset = 0
+                for i in range(total_lines - n_lines):
+                    line = f.readline()
+                    offset = f.tell()
+                
+                return offset
+                
+        except (UnicodeDecodeError, UnicodeError):
+            # 如果编码失败，尝试下一个
+            continue
+        except Exception:
+            # 其他错误（如文件不存在），返回0
+            return 0
+    
+    # 如果所有编码都失败，返回0
+    return 0
+
+
 class LogService:
     def __init__(self):
         self.jobs_dir = settings.JOBS_DIR
     
     async def stream_logs(self, job_id: str):
-        """SSE流式日志"""
+        """SSE流式日志 - 只推送增量日志（从末尾50条之后开始）"""
         log_file = self.jobs_dir / f"{job_id}.log"
         
         # 如果日志文件不存在，等待创建
@@ -72,13 +117,15 @@ class LogService:
             yield f"data: Log file not found\n\n"
             return
         
-        # 读取并流式输出
-        offset = 0
+        # 获取最后50行的起始位置作为初始offset，只推送增量日志
+        offset = await asyncio.to_thread(_get_file_tail_offset, log_file, 50)
+        
         while True:
             try:
                 # 在线程中读取日志（支持多种编码），每次最多读取50条
                 lines, new_offset = await asyncio.to_thread(_read_log_lines, log_file, offset, 50)
                 
+                # 只推送新增的日志行（增量）
                 for line in lines:
                     # 清理行内容：只移除空字符和替换字符，保留 ANSI 转义码
                     cleaned_line = line.rstrip().replace('\x00', '').replace('\ufffd', '')

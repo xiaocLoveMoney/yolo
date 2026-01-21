@@ -4,6 +4,9 @@ import time
 import shutil
 import base64
 import asyncio
+import uuid
+import csv
+import zipfile
 from pathlib import Path
 from typing import List, Dict, Any, AsyncGenerator
 from fastapi import UploadFile
@@ -11,12 +14,14 @@ from PIL import Image
 import tempfile
 import cv2
 import numpy as np
+from datetime import datetime
 from src.core.settings import settings
 
 class InferService:
     def __init__(self):
         self.registry_dir = settings.REGISTRY_DIR
         self.jobs_dir = settings.JOBS_DIR
+        self.inference_results_dir = settings.INFERENCE_RESULTS_DIR
         self._model_cache: Dict[str, Any] = {}  # 模型缓存
     
     def _get_model(self, model_id: str):
@@ -491,3 +496,187 @@ class InferService:
             (255, 0, 128),  # 粉色
         ]
         return colors[class_id % len(colors)]
+    
+    async def infer_and_save(self, model_id: str, files: List[UploadFile], save_results: bool = True):
+        """推理并保存结果图片，生成UUID和CSV"""
+        model, model_meta, error = self._get_model(model_id)
+        if error:
+            return {"error": error}
+        
+        # 创建会话目录
+        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        session_dir = self.inference_results_dir / session_id
+        images_dir = session_dir / "images"
+        
+        await asyncio.to_thread(lambda: images_dir.mkdir(parents=True, exist_ok=True))
+        
+        results_data = []
+        temp_files = []
+        
+        try:
+            for file in files:
+                # 保存上传的图片到临时文件
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                    content = await file.read()
+                    tmp.write(content)
+                    tmp_path = tmp.name
+                    temp_files.append(tmp_path)
+                
+                # 获取图片尺寸
+                with Image.open(tmp_path) as img:
+                    image_width, image_height = img.size
+                    img_array = np.array(img)
+                
+                # 执行推理
+                infer_results = model(tmp_path, verbose=False)
+                detections = self._parse_results(infer_results, model_meta)
+                
+                # 生成UUID
+                image_uuid = str(uuid.uuid4())
+                
+                # 如果需要保存结果
+                if save_results:
+                    # 在图片上绘制检测框
+                    img_with_boxes = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                    
+                    for det in detections:
+                        x1, y1, x2, y2 = int(det['x1']), int(det['y1']), int(det['x2']), int(det['y2'])
+                        class_id = det['class_id']
+                        class_name = det['class_name']
+                        conf = det['conf']
+                        
+                        # 绘制边界框
+                        color = self._get_color(class_id)
+                        cv2.rectangle(img_with_boxes, (x1, y1), (x2, y2), color, 2)
+                        
+                        # 绘制标签
+                        label = f"{class_name}: {conf:.2f}"
+                        label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                        cv2.rectangle(img_with_boxes, (x1, y1 - label_size[1] - 10),
+                                    (x1 + label_size[0], y1), color, -1)
+                        cv2.putText(img_with_boxes, label, (x1, y1 - 5),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                    
+                    # 保存结果图片
+                    result_image_path = images_dir / f"{image_uuid}.jpg"
+                    cv2.imwrite(str(result_image_path), img_with_boxes)
+                
+                # 记录结果
+                results_data.append({
+                    "image_uuid": image_uuid,
+                    "image_filename": file.filename,
+                    "model_id": model_id,
+                    "image_width": image_width,
+                    "image_height": image_height,
+                    "detection_count": len(detections),
+                    "detections": detections
+                })
+            
+            # 生成CSV文件
+            if save_results and results_data:
+                csv_path = session_dir / "results.csv"
+                
+                def _write_csv():
+                    with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                        # CSV包含扁平化的检测结果
+                        fieldnames = ['image_uuid', 'image_filename', 'model_id', 'image_width', 
+                                    'image_height', 'detection_count', 'detection_index', 
+                                    'class_id', 'class_name', 'confidence', 'x1', 'y1', 'x2', 'y2']
+                        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                        writer.writeheader()
+                        
+                        for result in results_data:
+                            if result['detections']:
+                                for idx, det in enumerate(result['detections']):
+                                    writer.writerow({
+                                        'image_uuid': result['image_uuid'],
+                                        'image_filename': result['image_filename'],
+                                        'model_id': result['model_id'],
+                                        'image_width': result['image_width'],
+                                        'image_height': result['image_height'],
+                                        'detection_count': result['detection_count'],
+                                        'detection_index': idx,
+                                        'class_id': det['class_id'],
+                                        'class_name': det['class_name'],
+                                        'confidence': det['conf'],
+                                        'x1': det['x1'],
+                                        'y1': det['y1'],
+                                        'x2': det['x2'],
+                                        'y2': det['y2']
+                                    })
+                            else:
+                                # 没有检测结果的图片也记录一行
+                                writer.writerow({
+                                    'image_uuid': result['image_uuid'],
+                                    'image_filename': result['image_filename'],
+                                    'model_id': result['model_id'],
+                                    'image_width': result['image_width'],
+                                    'image_height': result['image_height'],
+                                    'detection_count': 0,
+                                    'detection_index': '',
+                                    'class_id': '',
+                                    'class_name': '',
+                                    'confidence': '',
+                                    'x1': '',
+                                    'y1': '',
+                                    'x2': '',
+                                    'y2': ''
+                                })
+                
+                await asyncio.to_thread(_write_csv)
+                
+                # 生成元数据JSON
+                metadata = {
+                    "session_id": session_id,
+                    "model_id": model_id,
+                    "created_at": datetime.now().isoformat(),
+                    "total_images": len(results_data),
+                    "total_detections": sum(r['detection_count'] for r in results_data)
+                }
+                
+                metadata_path = session_dir / "metadata.json"
+                
+                def _write_metadata():
+                    with open(metadata_path, 'w', encoding='utf-8') as f:
+                        json.dump(metadata, f, indent=2, ensure_ascii=False)
+                
+                await asyncio.to_thread(_write_metadata)
+            
+            return {
+                "session_id": session_id,
+                "results": results_data,
+                "session_dir": str(session_dir) if save_results else None
+            }
+        
+        except Exception as e:
+            return {"error": str(e)}
+        
+        finally:
+            # 清理临时文件
+            for tmp_path in temp_files:
+                self._cleanup_temp_file(tmp_path)
+    
+    async def export_inference_results(self, session_id: str):
+        """导出推理结果为ZIP文件"""
+        session_dir = self.inference_results_dir / session_id
+        
+        if not await asyncio.to_thread(lambda: session_dir.exists()):
+            return None
+        
+        # 创建临时ZIP文件
+        def _create_zip():
+            temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+            temp_zip_path = temp_zip.name
+            temp_zip.close()
+            
+            with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # 添加所有文件
+                for item in session_dir.rglob("*"):
+                    if item.is_file():
+                        arcname = item.relative_to(session_dir)
+                        zipf.write(item, arcname)
+            
+            return temp_zip_path
+        
+        zip_path = await asyncio.to_thread(_create_zip)
+        return zip_path

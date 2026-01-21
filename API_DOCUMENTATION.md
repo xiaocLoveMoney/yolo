@@ -308,6 +308,81 @@ curl -X POST http://localhost:8000/datasets/upload \
 
 ---
 
+### 7. 导出标注后的数据集
+
+**接口描述**: 导出包含标注的数据集（YOLO格式）
+
+**请求方式**: `GET`
+
+**接口地址**: `/datasets/{dataset_id}/export/annotated`
+
+**请求类型**: 无
+
+**路径参数**:
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| dataset_id | string | 是 | 数据集 ID |
+
+**查询参数**:
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+|--------|------|------|--------|------|
+| version | string | 否 | "v1" | 数据集版本 |
+
+**响应类型**: `application/zip`
+
+**响应**: 返回ZIP文件流，包含：
+- `images/` - 图片目录（train/val）
+- `labels/` - 标签目录（YOLO格式）
+- `data.yaml` - 数据集配置文件
+
+**请求示例**:
+
+```bash
+curl -X GET http://localhost:8000/datasets/ds_20240115_123456/export/annotated \
+  -o dataset_annotated.zip
+```
+
+---
+
+### 8. 导出标注前的数据集
+
+**接口描述**: 导出原始数据集（仅包含图片，不含标注）
+
+**请求方式**: `GET`
+
+**接口地址**: `/datasets/{dataset_id}/export/original`
+
+**请求类型**: 无
+
+**路径参数**:
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| dataset_id | string | 是 | 数据集 ID |
+
+**查询参数**:
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+|--------|------|------|--------|------|
+| version | string | 否 | "v1" | 数据集版本 |
+
+**响应类型**: `application/zip`
+
+**响应**: 返回ZIP文件流，包含：
+- `images/` - 图片目录
+- `data.yaml` - 数据集配置文件（如果存在）
+
+**请求示例**:
+
+```bash
+curl -X GET http://localhost:8000/datasets/ds_20240115_123456/export/original \
+  -o dataset_original.zip
+```
+
+---
+
 ## 标注管理
 
 ### 1. 创建标注任务
@@ -1179,6 +1254,137 @@ data: {"frame": 1, "image_data": "base64_encoded_jpeg...", "detections": [...]}
 
 ---
 
+### 5. 推理并保存结果
+
+**接口描述**: 执行推理并保存结果图片，生成UUID和CSV文件
+
+**请求方式**: `POST`
+
+**接口地址**: `/infer/{model_id}/export`
+
+**请求类型**: `multipart/form-data`
+
+**路径参数**:
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| model_id | string | 是 | 模型 ID |
+
+**请求参数**:
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| files | array[File] | 是 | 多个图片文件 |
+
+**请求示例**:
+
+```bash
+curl -X POST http://localhost:8000/infer/model_20240115_123456/export \
+  -F "files=@image1.jpg" \
+  -F "files=@image2.jpg" \
+  -F "files=@image3.jpg"
+```
+
+**响应参数**:
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| session_id | string | 推理会话ID |
+| results | array[object] | 推理结果列表 |
+| session_dir | string | 结果保存目录 |
+
+**结果对象结构**:
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| image_uuid | string | 图片唯一标识符（UUID） |
+| image_filename | string | 原始文件名 |
+| model_id | string | 模型ID |
+| image_width | integer | 图片宽度 |
+| image_height | integer | 图片高度 |
+| detection_count | integer | 检测数量 |
+| detections | array[object] | 检测结果列表 |
+
+**响应示例**:
+
+```json
+{
+  "session_id": "session_20240115_123456_a1b2c3d4",
+  "results": [
+    {
+      "image_uuid": "550e8400-e29b-41d4-a716-446655440000",
+      "image_filename": "image1.jpg",
+      "model_id": "model_20240115_123456",
+      "image_width": 1920,
+      "image_height": 1080,
+      "detection_count": 2,
+      "detections": [
+        {
+          "class_id": 0,
+          "class_name": "person",
+          "conf": 0.95,
+          "x1": 100.0,
+          "y1": 200.0,
+          "x2": 300.0,
+          "y2": 400.0
+        }
+      ]
+    }
+  ],
+  "session_dir": "/app/data/inference_results/session_20240115_123456_a1b2c3d4"
+}
+```
+
+---
+
+### 6. 导出推理结果
+
+**接口描述**: 导出推理结果为ZIP文件，包含标注图片和CSV
+
+**请求方式**: `GET`
+
+**接口地址**: `/infer/results/{session_id}/export`
+
+**请求类型**: 无
+
+**路径参数**:
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| session_id | string | 是 | 推理会话ID |
+
+**响应类型**: `application/zip`
+
+**响应**: 返回ZIP文件流，包含：
+- `images/{uuid}.jpg` - 带标注的结果图片
+- `results.csv` - CSV格式的检测结果
+- `metadata.json` - 会话元数据
+
+**CSV文件格式**:
+
+| 列名 | 说明 |
+|------|------|
+| image_uuid | 图片UUID |
+| image_filename | 原始文件名 |
+| model_id | 模型ID |
+| image_width | 图片宽度 |
+| image_height | 图片高度 |
+| detection_count | 检测数量 |
+| detection_index | 检测索引 |
+| class_id | 类别ID |
+| class_name | 类别名称 |
+| confidence | 置信度 |
+| x1, y1, x2, y2 | 边界框坐标 |
+
+**请求示例**:
+
+```bash
+curl -X GET http://localhost:8000/infer/results/session_20240115_123456_a1b2c3d4/export \
+  -o inference_results.zip
+```
+
+---
+
 ## 模型管理
 
 ### 1. 列出所有模型
@@ -1346,6 +1552,159 @@ data: {"frame": 1, "image_data": "base64_encoded_jpeg...", "detections": [...]}
   "ok": true,
   "message": "Model deleted successfully"
 }
+```
+
+---
+
+### 5. 上传模型
+
+**接口描述**: 上传已有的模型文件（ZIP压缩包格式，与导出格式相同）
+
+**请求方式**: `POST`
+
+**接口地址**: `/models/upload`
+
+**请求类型**: `multipart/form-data`
+
+**请求参数**:
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| file | File | 是 | ZIP格式的模型压缩包，包含model.json和weights目录 |
+
+**ZIP文件结构要求**:
+
+ZIP文件应包含以下结构之一：
+
+**格式1（标准导出格式）**:
+```
+model_20240115_123456/
+  ├── model.json
+  └── weights/
+      └── best.pt
+```
+
+**格式2（简化格式）**:
+```
+model.json
+weights/
+  └── best.pt
+```
+
+**说明**:
+- ZIP文件必须包含`weights`目录，且至少包含一个`.pt`权重文件
+- 如果ZIP中包含`model.json`，将使用其中的元数据（name、classes、description等）
+- 如果ZIP中不包含`model.json`，将自动创建新的元数据
+- 如果ZIP中的model_id已存在，将自动生成新的model_id
+
+**请求示例**:
+
+```bash
+curl -X POST http://localhost:8000/models/upload \
+  -F "file=@my_model.zip"
+```
+
+**响应参数**:
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| model_id | string | 模型 ID |
+| name | string | 模型名称 |
+| weights_path | string | 权重文件路径 |
+| file_size | integer | 文件大小（字节） |
+| file_size_mb | float | 文件大小（MB） |
+| created_at | string | 创建时间 |
+| source | string | 来源（uploaded） |
+| classes | array[string] | 类别列表 |
+| description | string | 描述 |
+| tags | array[string] | 标签 |
+
+**响应示例**:
+
+```json
+{
+  "model_id": "model_20240115_123456",
+  "name": "Custom YOLOv8 Model",
+  "weights_path": "/app/models/registry/model_20240115_123456/weights/best.pt",
+  "file_size": 12345678,
+  "file_size_mb": 11.78,
+  "created_at": "2024-01-15T12:34:56",
+  "source": "uploaded",
+  "classes": ["person", "car", "dog"],
+  "description": "Uploaded model from my_model.zip",
+  "tags": ["uploaded"]
+}
+```
+
+---
+
+### 6. 导出模型
+
+**接口描述**: 导出模型为ZIP文件，包含权重和元数据
+
+**请求方式**: `GET`
+
+**接口地址**: `/models/{model_id}/export`
+
+**请求类型**: 无
+
+**路径参数**:
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| model_id | string | 是 | 模型 ID |
+
+**响应类型**: `application/zip`
+
+**响应**: 返回ZIP文件流，包含：
+- `{model_id}/weights/best.pt` - 模型权重文件
+- `{model_id}/model.json` - 模型元数据
+
+**请求示例**:
+
+```bash
+curl -X GET http://localhost:8000/models/model_20240115_123456/export \
+  -o model_20240115_123456.zip
+```
+
+---
+
+### 7. 生成训练图表
+
+**接口描述**: 生成模型训练过程的可视化图表
+
+**请求方式**: `GET`
+
+**接口地址**: `/models/{model_id}/charts`
+
+**请求类型**: 无
+
+**路径参数**:
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| model_id | string | 是 | 模型 ID |
+
+**查询参数**:
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+|--------|------|------|--------|------|
+| chart_type | string | 否 | "all" | 图表类型：loss（损失曲线）、metrics（指标曲线）、all（所有） |
+
+**响应类型**: `image/png`
+
+**响应**: 返回PNG格式的图表图片
+
+**请求示例**:
+
+```bash
+# 获取损失曲线图
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=loss \
+  -o loss_chart.png
+
+# 获取指标曲线图
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=metrics \
+  -o metrics_chart.png
 ```
 
 ---
@@ -1619,6 +1978,217 @@ curl -X POST http://localhost:8000/datasets/upload \
 
 ---
 
+### 5. Upload Model
+
+**Description**: Upload an existing model file (ZIP archive format, same as export format)
+
+**Method**: `POST`
+
+**Endpoint**: `/models/upload`
+
+**Content-Type**: `multipart/form-data`
+
+**Request Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| file | File | Yes | Model ZIP archive containing model.json and weights directory |
+
+**ZIP File Structure Requirements**:
+
+The ZIP file should contain one of the following structures:
+
+**Format 1 (Standard Export Format)**:
+```
+model_20240115_123456/
+  ├── model.json
+  └── weights/
+      └── best.pt
+```
+
+**Format 2 (Simplified Format)**:
+```
+model.json
+weights/
+  └── best.pt
+```
+
+**Notes**:
+- The ZIP file must contain a `weights` directory with at least one `.pt` weight file
+- If the ZIP contains `model.json`, its metadata (name, classes, description, etc.) will be used
+- If the ZIP does not contain `model.json`, new metadata will be automatically created
+- If the model_id in the ZIP already exists, a new model_id will be automatically generated
+
+**Request Example**:
+
+```bash
+curl -X POST http://localhost:8000/models/upload \
+  -F "file=@my_model.zip"
+```
+
+**Response Parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| model_id | string | Model ID |
+| name | string | Model name |
+| weights_path | string | Weight file path |
+| file_size | integer | File size in bytes |
+| file_size_mb | float | File size in MB |
+| created_at | string | Creation time |
+| source | string | Source (uploaded) |
+| classes | array[string] | Class list |
+| description | string | Description |
+| tags | array[string] | Tags |
+
+---
+
+### 6. Export Model
+
+**Description**: Export model as ZIP file with weights and metadata
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/export`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Response Type**: `application/zip`
+
+**Response**: Returns ZIP file stream containing:
+- `{model_id}/weights/best.pt` - Model weight file
+- `{model_id}/model.json` - Model metadata
+
+**Request Example**:
+
+```bash
+curl -X GET http://localhost:8000/models/model_20240115_123456/export \
+  -o model_20240115_123456.zip
+```
+
+---
+
+### 7. Generate Training Charts
+
+**Description**: Generate visualization charts for model training process
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/charts`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| chart_type | string | No | "all" | Chart type: loss, metrics, all |
+
+**Response Type**: `image/png`
+
+**Response**: Returns PNG format chart image
+
+**Request Example**:
+
+```bash
+# Get loss chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=loss \
+  -o loss_chart.png
+
+# Get metrics chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=metrics \
+  -o metrics_chart.png
+```
+
+---
+
+### 7. Export Annotated Dataset
+
+**Description**: Export dataset with annotations (YOLO format)
+
+**Method**: `GET`
+
+**Endpoint**: `/datasets/{dataset_id}/export/annotated`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| dataset_id | string | Yes | Dataset ID |
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| version | string | No | "v1" | Dataset version |
+
+**Response Type**: `application/zip`
+
+**Response**: Returns ZIP file stream containing:
+- `images/` - Image directory (train/val)
+- `labels/` - Label directory (YOLO format)
+- `data.yaml` - Dataset configuration file
+
+**Request Example**:
+
+```bash
+curl -X GET http://localhost:8000/datasets/ds_20240115_123456/export/annotated \
+  -o dataset_annotated.zip
+```
+
+---
+
+### 8. Export Original Dataset
+
+**Description**: Export original dataset (images only, no annotations)
+
+**Method**: `GET`
+
+**Endpoint**: `/datasets/{dataset_id}/export/original`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| dataset_id | string | Yes | Dataset ID |
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| version | string | No | "v1" | Dataset version |
+
+**Response Type**: `application/zip`
+
+**Response**: Returns ZIP file stream containing:
+- `images/` - Image directory
+- `data.yaml` - Dataset configuration file (if exists)
+
+**Request Example**:
+
+```bash
+curl -X GET http://localhost:8000/datasets/ds_20240115_123456/export/original \
+  -o dataset_original.zip
+```
+
+---
+
 ## Annotation Management
 
 ### 1. Create Annotation Task
@@ -1778,6 +2348,142 @@ curl -X POST http://localhost:8000/datasets/upload \
 |-----------|------|-------------|
 | ok | boolean | Success status |
 | message | string | Message |
+
+---
+
+### 5. Upload Model
+
+**Description**: Upload an existing model file (ZIP archive format, same as export format)
+
+**Method**: `POST`
+
+**Endpoint**: `/models/upload`
+
+**Content-Type**: `multipart/form-data`
+
+**Request Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| file | File | Yes | Model ZIP archive containing model.json and weights directory |
+
+**ZIP File Structure Requirements**:
+
+The ZIP file should contain one of the following structures:
+
+**Format 1 (Standard Export Format)**:
+```
+model_20240115_123456/
+  ├── model.json
+  └── weights/
+      └── best.pt
+```
+
+**Format 2 (Simplified Format)**:
+```
+model.json
+weights/
+  └── best.pt
+```
+
+**Notes**:
+- The ZIP file must contain a `weights` directory with at least one `.pt` weight file
+- If the ZIP contains `model.json`, its metadata (name, classes, description, etc.) will be used
+- If the ZIP does not contain `model.json`, new metadata will be automatically created
+- If the model_id in the ZIP already exists, a new model_id will be automatically generated
+
+**Request Example**:
+
+```bash
+curl -X POST http://localhost:8000/models/upload \
+  -F "file=@my_model.zip"
+```
+
+**Response Parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| model_id | string | Model ID |
+| name | string | Model name |
+| weights_path | string | Weight file path |
+| file_size | integer | File size in bytes |
+| file_size_mb | float | File size in MB |
+| created_at | string | Creation time |
+| source | string | Source (uploaded) |
+| classes | array[string] | Class list |
+| description | string | Description |
+| tags | array[string] | Tags |
+
+---
+
+### 6. Export Model
+
+**Description**: Export model as ZIP file with weights and metadata
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/export`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Response Type**: `application/zip`
+
+**Response**: Returns ZIP file stream containing:
+- `{model_id}/weights/best.pt` - Model weight file
+- `{model_id}/model.json` - Model metadata
+
+**Request Example**:
+
+```bash
+curl -X GET http://localhost:8000/models/model_20240115_123456/export \
+  -o model_20240115_123456.zip
+```
+
+---
+
+### 7. Generate Training Charts
+
+**Description**: Generate visualization charts for model training process
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/charts`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| chart_type | string | No | "all" | Chart type: loss, metrics, all |
+
+**Response Type**: `image/png`
+
+**Response**: Returns PNG format chart image
+
+**Request Example**:
+
+```bash
+# Get loss chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=loss \
+  -o loss_chart.png
+
+# Get metrics chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=metrics \
+  -o metrics_chart.png
+```
 | labels_dir | string | Label file directory path |
 | exported_count | integer | Number of exported label files |
 
@@ -1894,6 +2600,142 @@ curl -X POST http://localhost:8000/datasets/upload \
 
 ---
 
+### 5. Upload Model
+
+**Description**: Upload an existing model file (ZIP archive format, same as export format)
+
+**Method**: `POST`
+
+**Endpoint**: `/models/upload`
+
+**Content-Type**: `multipart/form-data`
+
+**Request Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| file | File | Yes | Model ZIP archive containing model.json and weights directory |
+
+**ZIP File Structure Requirements**:
+
+The ZIP file should contain one of the following structures:
+
+**Format 1 (Standard Export Format)**:
+```
+model_20240115_123456/
+  ├── model.json
+  └── weights/
+      └── best.pt
+```
+
+**Format 2 (Simplified Format)**:
+```
+model.json
+weights/
+  └── best.pt
+```
+
+**Notes**:
+- The ZIP file must contain a `weights` directory with at least one `.pt` weight file
+- If the ZIP contains `model.json`, its metadata (name, classes, description, etc.) will be used
+- If the ZIP does not contain `model.json`, new metadata will be automatically created
+- If the model_id in the ZIP already exists, a new model_id will be automatically generated
+
+**Request Example**:
+
+```bash
+curl -X POST http://localhost:8000/models/upload \
+  -F "file=@my_model.zip"
+```
+
+**Response Parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| model_id | string | Model ID |
+| name | string | Model name |
+| weights_path | string | Weight file path |
+| file_size | integer | File size in bytes |
+| file_size_mb | float | File size in MB |
+| created_at | string | Creation time |
+| source | string | Source (uploaded) |
+| classes | array[string] | Class list |
+| description | string | Description |
+| tags | array[string] | Tags |
+
+---
+
+### 6. Export Model
+
+**Description**: Export model as ZIP file with weights and metadata
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/export`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Response Type**: `application/zip`
+
+**Response**: Returns ZIP file stream containing:
+- `{model_id}/weights/best.pt` - Model weight file
+- `{model_id}/model.json` - Model metadata
+
+**Request Example**:
+
+```bash
+curl -X GET http://localhost:8000/models/model_20240115_123456/export \
+  -o model_20240115_123456.zip
+```
+
+---
+
+### 7. Generate Training Charts
+
+**Description**: Generate visualization charts for model training process
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/charts`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| chart_type | string | No | "all" | Chart type: loss, metrics, all |
+
+**Response Type**: `image/png`
+
+**Response**: Returns PNG format chart image
+
+**Request Example**:
+
+```bash
+# Get loss chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=loss \
+  -o loss_chart.png
+
+# Get metrics chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=metrics \
+  -o metrics_chart.png
+```
+
+---
+
 ### 5. Resume Training Job
 
 **Description**: Resume interrupted training job (supports normal stop and crash recovery)
@@ -1916,6 +2758,142 @@ curl -X POST http://localhost:8000/datasets/upload \
 |-----------|------|-------------|
 | ok | boolean | Success status |
 | message | string | Message |
+
+---
+
+### 5. Upload Model
+
+**Description**: Upload an existing model file (ZIP archive format, same as export format)
+
+**Method**: `POST`
+
+**Endpoint**: `/models/upload`
+
+**Content-Type**: `multipart/form-data`
+
+**Request Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| file | File | Yes | Model ZIP archive containing model.json and weights directory |
+
+**ZIP File Structure Requirements**:
+
+The ZIP file should contain one of the following structures:
+
+**Format 1 (Standard Export Format)**:
+```
+model_20240115_123456/
+  ├── model.json
+  └── weights/
+      └── best.pt
+```
+
+**Format 2 (Simplified Format)**:
+```
+model.json
+weights/
+  └── best.pt
+```
+
+**Notes**:
+- The ZIP file must contain a `weights` directory with at least one `.pt` weight file
+- If the ZIP contains `model.json`, its metadata (name, classes, description, etc.) will be used
+- If the ZIP does not contain `model.json`, new metadata will be automatically created
+- If the model_id in the ZIP already exists, a new model_id will be automatically generated
+
+**Request Example**:
+
+```bash
+curl -X POST http://localhost:8000/models/upload \
+  -F "file=@my_model.zip"
+```
+
+**Response Parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| model_id | string | Model ID |
+| name | string | Model name |
+| weights_path | string | Weight file path |
+| file_size | integer | File size in bytes |
+| file_size_mb | float | File size in MB |
+| created_at | string | Creation time |
+| source | string | Source (uploaded) |
+| classes | array[string] | Class list |
+| description | string | Description |
+| tags | array[string] | Tags |
+
+---
+
+### 6. Export Model
+
+**Description**: Export model as ZIP file with weights and metadata
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/export`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Response Type**: `application/zip`
+
+**Response**: Returns ZIP file stream containing:
+- `{model_id}/weights/best.pt` - Model weight file
+- `{model_id}/model.json` - Model metadata
+
+**Request Example**:
+
+```bash
+curl -X GET http://localhost:8000/models/model_20240115_123456/export \
+  -o model_20240115_123456.zip
+```
+
+---
+
+### 7. Generate Training Charts
+
+**Description**: Generate visualization charts for model training process
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/charts`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| chart_type | string | No | "all" | Chart type: loss, metrics, all |
+
+**Response Type**: `image/png`
+
+**Response**: Returns PNG format chart image
+
+**Request Example**:
+
+```bash
+# Get loss chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=loss \
+  -o loss_chart.png
+
+# Get metrics chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=metrics \
+  -o metrics_chart.png
+```
 | job_id | string | Job ID |
 | status | string | Job status |
 
@@ -1943,6 +2921,142 @@ curl -X POST http://localhost:8000/datasets/upload \
 |-----------|------|-------------|
 | ok | boolean | Success status |
 | message | string | Message |
+
+---
+
+### 5. Upload Model
+
+**Description**: Upload an existing model file (ZIP archive format, same as export format)
+
+**Method**: `POST`
+
+**Endpoint**: `/models/upload`
+
+**Content-Type**: `multipart/form-data`
+
+**Request Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| file | File | Yes | Model ZIP archive containing model.json and weights directory |
+
+**ZIP File Structure Requirements**:
+
+The ZIP file should contain one of the following structures:
+
+**Format 1 (Standard Export Format)**:
+```
+model_20240115_123456/
+  ├── model.json
+  └── weights/
+      └── best.pt
+```
+
+**Format 2 (Simplified Format)**:
+```
+model.json
+weights/
+  └── best.pt
+```
+
+**Notes**:
+- The ZIP file must contain a `weights` directory with at least one `.pt` weight file
+- If the ZIP contains `model.json`, its metadata (name, classes, description, etc.) will be used
+- If the ZIP does not contain `model.json`, new metadata will be automatically created
+- If the model_id in the ZIP already exists, a new model_id will be automatically generated
+
+**Request Example**:
+
+```bash
+curl -X POST http://localhost:8000/models/upload \
+  -F "file=@my_model.zip"
+```
+
+**Response Parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| model_id | string | Model ID |
+| name | string | Model name |
+| weights_path | string | Weight file path |
+| file_size | integer | File size in bytes |
+| file_size_mb | float | File size in MB |
+| created_at | string | Creation time |
+| source | string | Source (uploaded) |
+| classes | array[string] | Class list |
+| description | string | Description |
+| tags | array[string] | Tags |
+
+---
+
+### 6. Export Model
+
+**Description**: Export model as ZIP file with weights and metadata
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/export`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Response Type**: `application/zip`
+
+**Response**: Returns ZIP file stream containing:
+- `{model_id}/weights/best.pt` - Model weight file
+- `{model_id}/model.json` - Model metadata
+
+**Request Example**:
+
+```bash
+curl -X GET http://localhost:8000/models/model_20240115_123456/export \
+  -o model_20240115_123456.zip
+```
+
+---
+
+### 7. Generate Training Charts
+
+**Description**: Generate visualization charts for model training process
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/charts`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| chart_type | string | No | "all" | Chart type: loss, metrics, all |
+
+**Response Type**: `image/png`
+
+**Response**: Returns PNG format chart image
+
+**Request Example**:
+
+```bash
+# Get loss chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=loss \
+  -o loss_chart.png
+
+# Get metrics chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=metrics \
+  -o metrics_chart.png
+```
 
 ---
 
@@ -2177,6 +3291,107 @@ curl -X POST http://localhost:8000/datasets/upload \
 
 ---
 
+### 5. Inference and Save Results
+
+**Description**: Perform inference and save results with UUID and CSV
+
+**Method**: `POST`
+
+**Endpoint**: `/infer/{model_id}/export`
+
+**Content-Type**: `multipart/form-data`
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Request Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| files | array[File] | Yes | Multiple image files |
+
+**Request Example**:
+
+```bash
+curl -X POST http://localhost:8000/infer/model_20240115_123456/export \
+  -F "files=@image1.jpg" \
+  -F "files=@image2.jpg" \
+  -F "files=@image3.jpg"
+```
+
+**Response Parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| session_id | string | Inference session ID |
+| results | array[object] | Inference results list |
+| session_dir | string | Results save directory |
+
+**Result Object Structure**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| image_uuid | string | Image unique identifier (UUID) |
+| image_filename | string | Original filename |
+| model_id | string | Model ID |
+| image_width | integer | Image width |
+| image_height | integer | Image height |
+| detection_count | integer | Number of detections |
+| detections | array[object] | Detection results list |
+
+---
+
+### 6. Export Inference Results
+
+**Description**: Export inference results as ZIP file with annotated images and CSV
+
+**Method**: `GET`
+
+**Endpoint**: `/infer/results/{session_id}/export`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| session_id | string | Yes | Inference session ID |
+
+**Response Type**: `application/zip`
+
+**Response**: Returns ZIP file stream containing:
+- `images/{uuid}.jpg` - Annotated result images
+- `results.csv` - Detection results in CSV format
+- `metadata.json` - Session metadata
+
+**CSV File Format**:
+
+| Column | Description |
+|--------|-------------|
+| image_uuid | Image UUID |
+| image_filename | Original filename |
+| model_id | Model ID |
+| image_width | Image width |
+| image_height | Image height |
+| detection_count | Detection count |
+| detection_index | Detection index |
+| class_id | Class ID |
+| class_name | Class name |
+| confidence | Confidence |
+| x1, y1, x2, y2 | Bounding box coordinates |
+
+**Request Example**:
+
+```bash
+curl -X GET http://localhost:8000/infer/results/session_20240115_123456_a1b2c3d4/export \
+  -o inference_results.zip
+```
+
+---
+
 ## Model Management
 
 ### 1. List All Models
@@ -2280,3 +3495,139 @@ curl -X POST http://localhost:8000/datasets/upload \
 |-----------|------|-------------|
 | ok | boolean | Success status |
 | message | string | Message |
+
+---
+
+### 5. Upload Model
+
+**Description**: Upload an existing model file (ZIP archive format, same as export format)
+
+**Method**: `POST`
+
+**Endpoint**: `/models/upload`
+
+**Content-Type**: `multipart/form-data`
+
+**Request Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| file | File | Yes | Model ZIP archive containing model.json and weights directory |
+
+**ZIP File Structure Requirements**:
+
+The ZIP file should contain one of the following structures:
+
+**Format 1 (Standard Export Format)**:
+```
+model_20240115_123456/
+  ├── model.json
+  └── weights/
+      └── best.pt
+```
+
+**Format 2 (Simplified Format)**:
+```
+model.json
+weights/
+  └── best.pt
+```
+
+**Notes**:
+- The ZIP file must contain a `weights` directory with at least one `.pt` weight file
+- If the ZIP contains `model.json`, its metadata (name, classes, description, etc.) will be used
+- If the ZIP does not contain `model.json`, new metadata will be automatically created
+- If the model_id in the ZIP already exists, a new model_id will be automatically generated
+
+**Request Example**:
+
+```bash
+curl -X POST http://localhost:8000/models/upload \
+  -F "file=@my_model.zip"
+```
+
+**Response Parameters**:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| model_id | string | Model ID |
+| name | string | Model name |
+| weights_path | string | Weight file path |
+| file_size | integer | File size in bytes |
+| file_size_mb | float | File size in MB |
+| created_at | string | Creation time |
+| source | string | Source (uploaded) |
+| classes | array[string] | Class list |
+| description | string | Description |
+| tags | array[string] | Tags |
+
+---
+
+### 6. Export Model
+
+**Description**: Export model as ZIP file with weights and metadata
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/export`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Response Type**: `application/zip`
+
+**Response**: Returns ZIP file stream containing:
+- `{model_id}/weights/best.pt` - Model weight file
+- `{model_id}/model.json` - Model metadata
+
+**Request Example**:
+
+```bash
+curl -X GET http://localhost:8000/models/model_20240115_123456/export \
+  -o model_20240115_123456.zip
+```
+
+---
+
+### 7. Generate Training Charts
+
+**Description**: Generate visualization charts for model training process
+
+**Method**: `GET`
+
+**Endpoint**: `/models/{model_id}/charts`
+
+**Content-Type**: None
+
+**Path Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| model_id | string | Yes | Model ID |
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| chart_type | string | No | "all" | Chart type: loss, metrics, all |
+
+**Response Type**: `image/png`
+
+**Response**: Returns PNG format chart image
+
+**Request Example**:
+
+```bash
+# Get loss chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=loss \
+  -o loss_chart.png
+
+# Get metrics chart
+curl -X GET http://localhost:8000/models/model_20240115_123456/charts?chart_type=metrics \
+  -o metrics_chart.png
+```

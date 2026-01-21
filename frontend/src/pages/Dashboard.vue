@@ -31,6 +31,14 @@
       </div>
 
       <div class="card">
+        <h2>📦 模型管理</h2>
+        <p>上传、查看和管理训练好的模型</p>
+        <router-link to="/models">
+          <button>进入模型管理</button>
+        </router-link>
+      </div>
+
+      <div class="card">
         <h2>🔍 模型推理</h2>
         <p>使用训练好的模型进行推理</p>
         <router-link to="/infer">

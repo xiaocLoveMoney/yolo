@@ -7,6 +7,7 @@
         <router-link to="/datasets">数据集</router-link>
         <router-link to="/annotate">标注</router-link>
         <router-link to="/train">训练</router-link>
+        <router-link to="/models">模型管理</router-link>
         <router-link to="/infer">推理</router-link>
         <router-link to="/video-infer">视频推理</router-link>
       </div>

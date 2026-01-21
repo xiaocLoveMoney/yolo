@@ -45,9 +45,7 @@ WORKDIR /app
 COPY backend/requirements.txt /app/requirements.txt
 
 # 安装其他依赖（从清华镜像，排除 torch 和 torchvision）
-RUN grep -v "^torch" /app/requirements.txt | grep -v "^#" | grep -v "^$" > /tmp/requirements_no_torch.txt && \
-    pip install -r /tmp/requirements_no_torch.txt && \
-    rm /tmp/requirements_no_torch.txt
+RUN pip install -r /app/requirements.txt --no-cache-dir
     
 # 先安装 PyTorch 和 torchvision（使用 nightly 版本，CUDA 12.8 支持 RTX 5070 Blackwell sm_120）
 # 增加超时时间和重试次数以应对网络问题

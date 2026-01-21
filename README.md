@@ -20,6 +20,10 @@
 - ✅ **实时日志流** - SSE 实时日志推送，断线自动降级到轮询
 - ✅ **模型推理** - 支持图片和视频推理，可视化检测结果
 - ✅ **高性能训练** - 自动 Batch Size、混合精度训练、磁盘缓存优化
+- ✅ **模型上传与导出** - 支持上传已有模型，导出训练后的模型为ZIP
+- ✅ **数据集导出** - 支持导出标注前后的数据集（YOLO格式）
+- ✅ **推理结果导出** - 推理结果自动生成UUID，支持CSV和图片导出
+- ✅ **训练图表生成** - 使用matplotlib生成训练指标可视化图表
 
 ### 项目结构
 
@@ -450,6 +454,10 @@ A YOLO training platform based on YOLOv8 + FastAPI + Vue3. Provides complete dat
 - ✅ **Real-time Log Streaming** - SSE real-time log push with automatic fallback to polling
 - ✅ **Model Inference** - Support image and video inference with visualization
 - ✅ **High-performance Training** - Auto Batch Size, mixed precision training, disk cache optimization
+- ✅ **Model Upload & Export** - Upload existing models, export trained models as ZIP
+- ✅ **Dataset Export** - Export datasets before/after annotation (YOLO format)
+- ✅ **Inference Results Export** - Auto-generate UUID for inference results, support CSV and image export
+- ✅ **Training Charts Generation** - Generate training metrics visualization charts using matplotlib
 
 ### Project Structure
 

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from typing import List
 from src.services.infer_service import InferService
 
@@ -82,4 +82,46 @@ async def video_inference_stream(
     return StreamingResponse(
         infer_service.infer_video_stream(model_id, file, conf),
         media_type="text/event-stream"
+    )
+
+@router.post("/{model_id}/export")
+async def inference_and_export(
+    model_id: str,
+    files: List[UploadFile] = File(...)
+):
+    """执行推理并保存结果，生成UUID和CSV
+    
+    Args:
+        model_id: 模型ID
+        files: 图片文件列表
+    
+    Returns:
+        包含session_id和结果的JSON
+    """
+    result = await infer_service.infer_and_save(model_id, files, save_results=True)
+    
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    
+    return result
+
+@router.get("/results/{session_id}/export")
+async def export_inference_results(session_id: str):
+    """导出推理结果为ZIP文件
+    
+    Args:
+        session_id: 推理会话ID
+    
+    Returns:
+        包含所有推理结果图片和CSV的ZIP文件
+    """
+    zip_path = await infer_service.export_inference_results(session_id)
+    if not zip_path:
+        raise HTTPException(404, "Inference session not found")
+    
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=f"{session_id}_results.zip",
+        headers={"Content-Disposition": f"attachment; filename={session_id}_results.zip"}
     )

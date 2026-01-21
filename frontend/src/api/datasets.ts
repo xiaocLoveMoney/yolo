@@ -39,3 +39,19 @@ export const deleteDataset = async (datasetId: string) => {
   const { data } = await api.delete(`/datasets/${datasetId}`)
   return data
 }
+
+export const exportAnnotatedDataset = async (datasetId: string, version: string = 'v1'): Promise<Blob> => {
+  const response = await api.get(`/datasets/${datasetId}/export/annotated`, {
+    params: { version },
+    responseType: 'blob'
+  })
+  return response.data
+}
+
+export const exportOriginalDataset = async (datasetId: string, version: string = 'v1'): Promise<Blob> => {
+  const response = await api.get(`/datasets/${datasetId}/export/original`, {
+    params: { version },
+    responseType: 'blob'
+  })
+  return response.data
+}

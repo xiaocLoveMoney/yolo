@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     DATASETS_DIR: Path = DATA_DIR / "datasets"
     ANNOTATIONS_DIR: Path = DATA_DIR / "annotations"
     JOBS_DIR: Path = DATA_DIR / "jobs"
+    INFERENCE_RESULTS_DIR: Path = DATA_DIR / "inference_results"
     
     # 模型目录
     MODELS_DIR: Path = BASE_DIR / "models"
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
             self.JOBS_DIR,
             self.MODELS_DIR,
             self.REGISTRY_DIR,
+            self.INFERENCE_RESULTS_DIR,
         ]:
             dir_path.mkdir(parents=True, exist_ok=True)
 

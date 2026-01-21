@@ -183,3 +183,41 @@ export const videoInferenceStream = (
     })
   })
 }
+
+export interface InferenceAndSaveResult {
+  session_id: string
+  results: {
+    image_uuid: string
+    image_filename: string
+    model_id: string
+    image_width: number
+    image_height: number
+    detection_count: number
+    detections: {
+      class_id: number
+      class_name: string
+      conf: number
+      x1: number
+      y1: number
+      x2: number
+      y2: number
+    }[]
+  }[]
+  session_dir: string | null
+}
+
+export const inferenceAndSave = async (modelId: string, files: File[]): Promise<InferenceAndSaveResult> => {
+  const formData = new FormData()
+  files.forEach(file => {
+    formData.append('files', file)
+  })
+  const { data } = await api.post(`/infer/${modelId}/export`, formData)
+  return data
+}
+
+export const exportInferenceResults = async (sessionId: string): Promise<Blob> => {
+  const response = await api.get(`/infer/results/${sessionId}/export`, {
+    responseType: 'blob'
+  })
+  return response.data
+}

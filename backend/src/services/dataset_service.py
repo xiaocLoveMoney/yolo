@@ -5,6 +5,7 @@ import asyncio
 import yaml
 import os
 import logging
+import tempfile
 from pathlib import Path
 from datetime import datetime
 from fastapi import UploadFile
@@ -385,3 +386,77 @@ class DatasetService:
         await asyncio.to_thread(_delete_file, zip_path)
         
         return {"ok": True, "message": f"Dataset {dataset_id} deleted"}
+    
+    async def export_annotated_dataset(self, dataset_id: str, version: str = "v1"):
+        """导出标注后的数据集"""
+        dataset_dir = self.datasets_dir / dataset_id
+        version_dir = dataset_dir / version
+        
+        if not await asyncio.to_thread(lambda: version_dir.exists()):
+            return None
+        
+        # 创建临时ZIP文件
+        def _create_zip():
+            temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+            temp_zip_path = temp_zip.name
+            temp_zip.close()
+            
+            with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # 添加images目录
+                images_dir = self._find_images_dir(version_dir)
+                if images_dir:
+                    for img_file in images_dir.rglob("*"):
+                        if img_file.is_file():
+                            arcname = img_file.relative_to(version_dir)
+                            zipf.write(img_file, arcname)
+                
+                # 添加labels目录
+                labels_dir = self._find_labels_dir(version_dir)
+                if labels_dir:
+                    for label_file in labels_dir.rglob("*"):
+                        if label_file.is_file():
+                            arcname = label_file.relative_to(version_dir)
+                            zipf.write(label_file, arcname)
+                
+                # 添加data.yaml
+                data_yaml = version_dir / "data.yaml"
+                if data_yaml.exists():
+                    zipf.write(data_yaml, "data.yaml")
+            
+            return temp_zip_path
+        
+        zip_path = await asyncio.to_thread(_create_zip)
+        return zip_path
+    
+    async def export_original_dataset(self, dataset_id: str, version: str = "v1"):
+        """导出标注前的数据集（仅图片）"""
+        dataset_dir = self.datasets_dir / dataset_id
+        version_dir = dataset_dir / version
+        
+        if not await asyncio.to_thread(lambda: version_dir.exists()):
+            return None
+        
+        # 创建临时ZIP文件
+        def _create_zip():
+            temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+            temp_zip_path = temp_zip.name
+            temp_zip.close()
+            
+            with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # 仅添加images目录
+                images_dir = self._find_images_dir(version_dir)
+                if images_dir:
+                    for img_file in images_dir.rglob("*"):
+                        if img_file.is_file():
+                            arcname = img_file.relative_to(version_dir)
+                            zipf.write(img_file, arcname)
+                
+                # 可选：添加data.yaml（如果存在）
+                data_yaml = version_dir / "data.yaml"
+                if data_yaml.exists():
+                    zipf.write(data_yaml, "data.yaml")
+            
+            return temp_zip_path
+        
+        zip_path = await asyncio.to_thread(_create_zip)
+        return zip_path
